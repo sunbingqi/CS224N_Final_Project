@@ -134,6 +134,12 @@ def get_train_args():
                         type=float,
                         default=0.999,
                         help='Decay rate for exponential moving average of parameters.')
+    parser.add_argument('--char_channel_size',
+                        type=int,
+                        default=100)
+    parser.add_argument('--char_channel_width',
+                        type=int,
+                        default=5)
 
     args = parser.parse_args()
 

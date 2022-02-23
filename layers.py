@@ -23,20 +23,64 @@ class Embedding(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, word_vectors, hidden_size, drop_prob):
+    def __init__(self, word_vectors, hidden_size, character_vectors, char_channel_size, char_channel_width, drop_prob):
         super(Embedding, self).__init__()
         self.drop_prob = drop_prob
-        self.embed = nn.Embedding.from_pretrained(word_vectors)
-        self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
+        self.word_embed = nn.Embedding.from_pretrained(word_vectors)
+
+        self.char_embed = nn.Embedding.from_pretrained(character_vectors)
+        self.char_embed_layer = CharEmbedding(hidden_size, self.char_embed, character_vectors.size(1), char_channel_size, char_channel_width)
+
+        self.proj = nn.Linear(word_vectors.size(1)+character_vectors.size(1), hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
-    def forward(self, x):
-        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
-        emb = F.dropout(emb, self.drop_prob, self.training)
+    def forward(self, x1, x2):
+        word_emb = self.word_embed(x1)   # (batch_size, seq_len, embed_size)
+        word_emb = F.dropout(word_emb, self.drop_prob, self.training)
+
+        char_emb = self.char_embed(x2)
+        char_emb = self.char_embed_layer(char_emb)
+
+        emb = torch.cat([word_emb, char_emb], dim=-1)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
         return emb
+
+
+class CharEmbedding(nn.Module):
+    """Character embedding layer
+
+    Args:
+
+    """
+
+    def __init__(self, hidden_size, char_embed, char_dim, char_channel_size, char_channel_width):
+        self.hidden_size = hidden_size
+        self.char_embed = char_embed
+        self.char_dim = char_dim
+        self.char_channel_size = char_channel_size
+        self.char_conv = nn.Sequential(
+                            nn.Conv2d(1, char_channel_size, (char_dim, char_channel_width)),
+                            nn.ReLU()
+                         )
+
+    def forward(self, x):
+        batch_size = x.size(0)
+        # (batch, seq_len, word_len, char_dim)
+        x = self.dropout(self.char_embed(x))
+        # (batch， seq_len, char_dim, word_len)
+        x = x.transpose(2, 3)
+        # (batch * seq_len, 1, char_dim, word_len)
+        x = x.view(-1, self.char_dim, x.size(3)).unsqueeze(1)
+        # (batch * seq_len, char_channel_size, 1, conv_len) -> (batch * seq_len, char_channel_size, conv_len)
+        x = self.char_conv(x).squeeze()
+        # (batch * seq_len, char_channel_size, 1) -> (batch * seq_len, char_channel_size)
+        x = F.max_pool1d(x, x.size(2)).squeeze()
+        # (batch, seq_len, char_channel_size)
+        x = x.view(batch_size, -1, self.char_channel_size)
+
+        return x
 
 
 class HighwayEncoder(nn.Module):
@@ -64,7 +108,6 @@ class HighwayEncoder(nn.Module):
             g = torch.sigmoid(gate(x))
             t = F.relu(transform(x))
             x = g * t + (1 - g) * x
-
         return x
 
 
