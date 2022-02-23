@@ -28,18 +28,18 @@ class Embedding(nn.Module):
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
 
-        self.char_embed = nn.Embedding.from_pretrained(character_vectors)
-        self.char_embed_layer = CharEmbedding(hidden_size, self.char_embed, character_vectors.size(1), char_channel_size, char_channel_width)
+        #self.char_embed = nn.Embedding.from_pretrained(character_vectors)
+        self.char_embed_layer = CharEmbedding(hidden_size, character_vectors, character_vectors.size(1), char_channel_size, char_channel_width, drop_prob)
 
-        self.proj = nn.Linear(word_vectors.size(1)+character_vectors.size(1), hidden_size, bias=False)
+        self.proj = nn.Linear(word_vectors.size(1) + char_channel_size, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, x1, x2):
         word_emb = self.word_embed(x1)   # (batch_size, seq_len, embed_size)
         word_emb = F.dropout(word_emb, self.drop_prob, self.training)
 
-        char_emb = self.char_embed(x2)
-        char_emb = self.char_embed_layer(char_emb)
+        #char_emb = self.char_embed(x2)
+        char_emb = self.char_embed_layer(x2)
 
         emb = torch.cat([word_emb, char_emb], dim=-1)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
@@ -55,9 +55,11 @@ class CharEmbedding(nn.Module):
 
     """
 
-    def __init__(self, hidden_size, char_embed, char_dim, char_channel_size, char_channel_width):
+    def __init__(self, hidden_size, character_vectors, char_dim, char_channel_size, char_channel_width, drop_prob):
+        super(CharEmbedding, self).__init__()
         self.hidden_size = hidden_size
-        self.char_embed = char_embed
+        self.drop_prob = drop_prob
+        self.char_embed = nn.Embedding.from_pretrained(character_vectors)
         self.char_dim = char_dim
         self.char_channel_size = char_channel_size
         self.char_conv = nn.Sequential(
@@ -68,7 +70,7 @@ class CharEmbedding(nn.Module):
     def forward(self, x):
         batch_size = x.size(0)
         # (batch, seq_len, word_len, char_dim)
-        x = self.dropout(self.char_embed(x))
+        x = F.dropout(self.char_embed(x), self.drop_prob, self.training)
         # (batch， seq_len, char_dim, word_len)
         x = x.transpose(2, 3)
         # (batch * seq_len, 1, char_dim, word_len)

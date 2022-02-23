@@ -50,7 +50,7 @@ def main(args):
     model = BiDAF(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   character_vectors=character_vectors,
-                  char_channel_size=char_channel_size,
+                  char_channel_size=args.char_channel_size,
                   char_channel_width=args.char_channel_width,
                   drop_prob=args.drop_prob
                   )
