@@ -74,3 +74,55 @@ class BiDAF(nn.Module):
         out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
+
+
+
+class QANet(nn.Module):
+    def __init__(self, word_vectors, character_vectors, hidden_size, pad=0, dropout=0.1, num_head=1):
+        super().__init__()
+
+        self.emb = layers.Embedding(word_vectors=word_vectors,
+                                    hidden_size=hidden_size,
+                                    character_vectors=character_vectors,
+                                    char_channel_size=char_channel_size,
+                                    char_channel_width=char_channel_width,
+                                    drop_prob=drop_prob)
+
+        self.num_head = num_head
+        self.emb_enc = layers.EncoderBlock(conv_num=4, hidden_size=hidden_size, num_head=num_head, k=7, dropout=0.1)
+        self.cq_att = CQAttention(hidden_size=hidden_size)
+        self.cq_resizer = layers.Initialized_Conv1d(hidden_size * 4, hidden_size)
+        self.model_enc_blks = nn.ModuleList([layers.EncoderBlock(conv_num=2, hidden_size=hidden_size, num_head=num_head, k=5, dropout=0.1) for _ in range(7)])
+        self.out = layers.Pointer(hidden_size)
+        self.PAD = pad
+        self.dropout = dropout
+
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs):
+        maskC = torch.zeros_like(cw_idxs) != cw_idxs
+        maskQ = torch.zeros_like(qw_idxs) != qw_idxs
+
+        C = self.emb(cw_idxs, cc_idxs)  # (batch_size, c_len, hidden_size)
+        Q = self.emb(qw_idxs, qc_idxs)  # (batch_size, q_len, hidden_size)
+
+        Ce = self.emb_enc(C, maskC, 1, 1)
+        Qe = self.emb_enc(Q, maskQ, 1, 1)
+        X = self.cq_att(Ce, Qe, maskC, maskQ)
+        M0 = self.cq_resizer(X)
+        M0 = F.dropout(M0, p=self.dropout, training=self.training)
+        for i, blk in enumerate(self.model_enc_blks):
+             M0 = blk(M0, maskC, i*(2+2)+1, 7)
+        M1 = M0
+        for i, blk in enumerate(self.model_enc_blks):
+             M0 = blk(M0, maskC, i*(2+2)+1, 7)
+        M2 = M0
+        M0 = F.dropout(M0, p=self.dropout, training=self.training)
+        for i, blk in enumerate(self.model_enc_blks):
+             M0 = blk(M0, maskC, i*(2+2)+1, 7)
+        M3 = M0
+        p1, p2 = self.out(M1, M2, M3, maskC)
+        return p1, p2
+
+    def summary(self):
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        print('Trainable parameters:', params)
