@@ -50,11 +50,15 @@ def main(args):
     # model = BiDAF(word_vectors=word_vectors,
     #               hidden_size=args.hidden_size,
     #               character_vectors=character_vectors,
-    #               char_channel_size=char_channel_size,
+    #               char_channel_size=args.char_channel_size,
     #               char_channel_width=args.char_channel_width,
     #               drop_prob=args.drop_prob
     #               )
-    model = QANet(word_vectors=word_vectors, character_vectors=character_vectors, hidden_size=hidden_size)
+    model = QANet(word_vectors=word_vectors,
+                  character_vectors=character_vectors,
+                  hidden_size=hidden_size,
+                  char_channel_size=args.char_channel_size,
+                  char_channel_width=args.char_channel_width)
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')

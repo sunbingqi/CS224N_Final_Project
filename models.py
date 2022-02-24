@@ -78,7 +78,7 @@ class BiDAF(nn.Module):
 
 
 class QANet(nn.Module):
-    def __init__(self, word_vectors, character_vectors, hidden_size, pad=0, dropout=0.1, num_head=1):
+    def __init__(self, word_vectors, character_vectors, hidden_size, char_channel_size, char_channel_width, pad=0, drop_prob=0.1, num_head=1):
         super().__init__()
 
         self.emb = layers.Embedding(word_vectors=word_vectors,
@@ -95,7 +95,7 @@ class QANet(nn.Module):
         self.model_enc_blks = nn.ModuleList([layers.EncoderBlock(conv_num=2, hidden_size=hidden_size, num_head=num_head, k=5, dropout=0.1) for _ in range(7)])
         self.out = layers.Pointer(hidden_size)
         self.PAD = pad
-        self.dropout = dropout
+        self.dropout = drop_prob
 
     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs):
         maskC = torch.zeros_like(cw_idxs) != cw_idxs
