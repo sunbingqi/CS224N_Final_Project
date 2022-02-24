@@ -56,7 +56,7 @@ def main(args):
     #               )
     model = QANet(word_vectors=word_vectors,
                   character_vectors=character_vectors,
-                  hidden_size=hidden_size,
+                  hidden_size=args.hidden_size,
                   char_channel_size=args.char_channel_size,
                   char_channel_width=args.char_channel_width)
     model = nn.DataParallel(model, args.gpu_ids)

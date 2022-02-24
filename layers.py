@@ -7,10 +7,36 @@ Author:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
 
+def mask_logits(target, mask):
+    mask = mask.type(torch.float32)
+    return target * mask + (1 - mask) * (-1e30)
+
+def get_timing_signal(length, channels,
+                      min_timescale=1.0, max_timescale=1.0e4):
+    position = torch.arange(length).type(torch.float32)
+    num_timescales = channels // 2
+    log_timescale_increment = (math.log(float(max_timescale) / float(min_timescale)) / (float(num_timescales) - 1))
+    inv_timescales = min_timescale * torch.exp(
+            torch.arange(num_timescales).type(torch.float32) * -log_timescale_increment)
+    scaled_time = position.unsqueeze(1) * inv_timescales.unsqueeze(0)
+    signal = torch.cat([torch.sin(scaled_time), torch.cos(scaled_time)], dim = 1)
+    m = nn.ZeroPad2d((0, (channels % 2), 0, 0))
+    signal = m(signal)
+    signal = signal.view(1, length, channels)
+    return signal
+
+def PosEncoder(x, min_timescale=1.0, max_timescale=1.0e4):
+    x = x.transpose(1, 2)
+    length = x.size()[1]
+    channels = x.size()[2]
+    signal = get_timing_signal(length, channels, min_timescale, max_timescale)
+    return (x + signal.to(x.get_device())).transpose(1, 2)
+    #return (x + signal.to('cpu')).transpose(1, 2)
 
 class Embedding(nn.Module):
     """Embedding layer used by BiDAF, without the character-level component.
@@ -389,6 +415,9 @@ class EncoderBlock(nn.Module):
         out = PosEncoder(x)
         for i, conv in enumerate(self.convs):
             res = out
+            # print("before norm C:!!!!!!!!!!!!!!!!!!!")
+            # print(out.shape)
+            # print(out.transpose(1,2).shape)
             out = self.norm_C[i](out.transpose(1,2)).transpose(1,2)
             if (i) % 2 == 0:
                 out = F.dropout(out, p=dropout, training=self.training)
@@ -396,6 +425,7 @@ class EncoderBlock(nn.Module):
             out = self.layer_dropout(out, res, dropout*float(l)/total_layers)
             l += 1
         res = out
+        
         out = self.norm_1(out.transpose(1,2)).transpose(1,2)
         out = F.dropout(out, p=dropout, training=self.training)
         out = self.self_att(out, mask)
@@ -432,3 +462,58 @@ class Pointer(nn.Module):
         Y1 = mask_logits(self.w1(X1).squeeze(), mask)
         Y2 = mask_logits(self.w2(X2).squeeze(), mask)
         return Y1, Y2
+
+class DepthwiseSeparableConv(nn.Module):
+    def __init__(self, in_ch, out_ch, k, bias=True):
+        super().__init__()
+        self.depthwise_conv = nn.Conv1d(in_channels=in_ch, out_channels=in_ch, kernel_size=k, groups=in_ch, padding=k // 2, bias=False)
+        self.pointwise_conv = nn.Conv1d(in_channels=in_ch, out_channels=out_ch, kernel_size=1, padding=0, bias=bias)
+    def forward(self, x):
+        return F.relu(self.pointwise_conv(self.depthwise_conv(x)))
+
+class CQAttention(nn.Module):
+    def __init__(self, hidden_size, dropout=0.1):
+        super().__init__()
+        w4C = torch.empty(hidden_size, 1)
+        w4Q = torch.empty(hidden_size, 1)
+        w4mlu = torch.empty(1, 1, hidden_size)
+        nn.init.xavier_uniform_(w4C)
+        nn.init.xavier_uniform_(w4Q)
+        nn.init.xavier_uniform_(w4mlu)
+        self.w4C = nn.Parameter(w4C)
+        self.w4Q = nn.Parameter(w4Q)
+        self.w4mlu = nn.Parameter(w4mlu)
+
+        bias = torch.empty(1)
+        nn.init.constant_(bias, 0)
+        self.bias = nn.Parameter(bias)
+        self.dropout = dropout
+
+    def forward(self, C, Q, Cmask, Qmask):
+        C = C.transpose(1, 2)
+        Q = Q.transpose(1, 2)
+        batch_size_c = C.size()[0]
+        batch_size, Lc, hidden_size = C.shape
+        batch_size, Lq, hidden_size = Q.shape
+        S = self.trilinear_for_attention(C, Q)
+        Cmask = Cmask.view(batch_size_c, Lc, 1)
+        Qmask = Qmask.view(batch_size_c, 1, Lq)
+        S1 = F.softmax(mask_logits(S, Qmask), dim=2)
+        S2 = F.softmax(mask_logits(S, Cmask), dim=1)
+        A = torch.bmm(S1, Q)
+        B = torch.bmm(torch.bmm(S1, S2.transpose(1, 2)), C)
+        out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=2)
+        return out.transpose(1, 2)
+
+    def trilinear_for_attention(self, C, Q):
+        batch_size, Lc, hidden_size = C.shape
+        batch_size, Lq, hidden_size = Q.shape
+        dropout = self.dropout
+        C = F.dropout(C, p=dropout, training=self.training)
+        Q = F.dropout(Q, p=dropout, training=self.training)
+        subres0 = torch.matmul(C, self.w4C).expand([-1, -1, Lq])
+        subres1 = torch.matmul(Q, self.w4Q).transpose(1, 2).expand([-1, Lc, -1])
+        subres2 = torch.matmul(C * self.w4mlu, Q.transpose(1,2))
+        res = subres0 + subres1 + subres2
+        res += self.bias
+        return res

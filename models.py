@@ -7,6 +7,7 @@ Author:
 import layers
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BiDAF(nn.Module):
@@ -90,22 +91,22 @@ class QANet(nn.Module):
 
         self.num_head = num_head
         self.emb_enc = layers.EncoderBlock(conv_num=4, hidden_size=hidden_size, num_head=num_head, k=7, dropout=0.1)
-        self.cq_att = CQAttention(hidden_size=hidden_size)
+        self.cq_att = layers.CQAttention(hidden_size=hidden_size)
         self.cq_resizer = layers.Initialized_Conv1d(hidden_size * 4, hidden_size)
         self.model_enc_blks = nn.ModuleList([layers.EncoderBlock(conv_num=2, hidden_size=hidden_size, num_head=num_head, k=5, dropout=0.1) for _ in range(7)])
         self.out = layers.Pointer(hidden_size)
         self.PAD = pad
         self.dropout = drop_prob
 
-    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs):
+    def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
         maskC = torch.zeros_like(cw_idxs) != cw_idxs
         maskQ = torch.zeros_like(qw_idxs) != qw_idxs
 
         C = self.emb(cw_idxs, cc_idxs)  # (batch_size, c_len, hidden_size)
         Q = self.emb(qw_idxs, qc_idxs)  # (batch_size, q_len, hidden_size)
 
-        Ce = self.emb_enc(C, maskC, 1, 1)
-        Qe = self.emb_enc(Q, maskQ, 1, 1)
+        Ce = self.emb_enc(C.transpose(1,2), maskC, 1, 1)
+        Qe = self.emb_enc(Q.transpose(1,2), maskQ, 1, 1)
         X = self.cq_att(Ce, Qe, maskC, maskQ)
         M0 = self.cq_resizer(X)
         M0 = F.dropout(M0, p=self.dropout, training=self.training)
