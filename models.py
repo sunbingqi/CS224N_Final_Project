@@ -8,6 +8,7 @@ import layers
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from util import masked_softmax
 
 
 class BiDAF(nn.Module):
@@ -121,7 +122,9 @@ class QANet(nn.Module):
              M0 = blk(M0, maskC, i*(2+2)+1, 7)
         M3 = M0
         p1, p2 = self.out(M1, M2, M3, maskC)
-        return p1, p2
+        log_p1 = masked_softmax(p1.squeeze(), maskC, log_softmax=True)
+        log_p2 = masked_softmax(p2.squeeze(), maskC, log_softmax=True)
+        return log_p1, log_p2
 
     def summary(self):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
