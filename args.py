@@ -171,6 +171,13 @@ def get_test_args():
                         type=str,
                         default='submission.csv',
                         help='Name for submission file.')
+    parser.add_argument('--char_channel_size',
+                        type=int,
+                        default=100)
+    parser.add_argument('--char_channel_width',
+                        type=int,
+                        default=5)
+
 
     # Require load_path for test.py
     args = parser.parse_args()
