@@ -374,13 +374,66 @@ def pre_process(args):
     save(args.char2idx_file, char2idx_dict, message="char dictionary")
     save(args.dev_meta_file, dev_meta, message="dev meta")
 
+    # args.dev_file = "./data/how_dev.json"
+    # args.dev_eval_file = "./data/how_eval.json"
+    # args.dev_record_file = "./data/dev_how.npz"
+    # args.dev_meta_file = "./data/dev_how_meta.json"
+    # dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)
+    # dev_meta = build_features(args, dev_examples, "dev", args.dev_record_file, word2idx_dict, char2idx_dict)
+    # save(args.dev_eval_file, dev_eval, message="dev eval")
+    # save(args.dev_meta_file, dev_meta, message="dev meta")
+    #
+    # args.dev_file = "./data/when_dev.json"
+    # args.dev_eval_file = "./data/when_eval.json"
+    # args.dev_record_file = "./data/dev_when.npz"
+    # args.dev_meta_file = "./data/dev_when_meta.json"
+    # dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)
+    # dev_meta = build_features(args, dev_examples, "dev", args.dev_record_file, word2idx_dict, char2idx_dict)
+    # save(args.dev_eval_file, dev_eval, message="dev eval")
+    # save(args.dev_meta_file, dev_meta, message="dev meta")
+    #
+    # args.dev_file = "./data/where_dev.json"
+    # args.dev_eval_file = "./data/where_eval.json"
+    # args.dev_record_file = "./data/dev_where.npz"
+    # args.dev_meta_file = "./data/dev_where_meta.json"
+    # dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)
+    # dev_meta = build_features(args, dev_examples, "dev", args.dev_record_file, word2idx_dict, char2idx_dict)
+    # save(args.dev_eval_file, dev_eval, message="dev eval")
+    # save(args.dev_meta_file, dev_meta, message="dev meta")
+    #
+    # args.dev_file = "./data/which_dev.json"
+    # args.dev_eval_file = "./data/which_eval.json"
+    # args.dev_record_file = "./data/dev_which.npz"
+    # args.dev_meta_file = "./data/dev_which_meta.json"
+    # dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)
+    # dev_meta = build_features(args, dev_examples, "dev", args.dev_record_file, word2idx_dict, char2idx_dict)
+    # save(args.dev_eval_file, dev_eval, message="dev eval")
+    # save(args.dev_meta_file, dev_meta, message="dev meta")
+    #
+    # args.dev_file = "./data/why_dev.json"
+    # args.dev_eval_file = "./data/why_eval.json"
+    # args.dev_record_file = "./data/dev_why.npz"
+    # args.dev_meta_file = "./data/dev_why_meta.json"
+    # dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)
+    # dev_meta = build_features(args, dev_examples, "dev", args.dev_record_file, word2idx_dict, char2idx_dict)
+    # save(args.dev_eval_file, dev_eval, message="dev eval")
+    # save(args.dev_meta_file, dev_meta, message="dev meta")
+    #
+    # args.dev_file = "./data/other_dev.json"
+    # args.dev_eval_file = "./data/other_eval.json"
+    # args.dev_record_file = "./data/dev_other.npz"
+    # args.dev_meta_file = "./data/dev_other_meta.json"
+    # dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)
+    # dev_meta = build_features(args, dev_examples, "dev", args.dev_record_file, word2idx_dict, char2idx_dict)
+    # save(args.dev_eval_file, dev_eval, message="dev eval")
+    # save(args.dev_meta_file, dev_meta, message="dev meta")
 
 if __name__ == '__main__':
     # Get command-line args
     args_ = get_setup_args()
 
     # Download resources
-    download(args_)
+    # download(args_)
 
     # Import spacy language model
     nlp = spacy.blank("en")
@@ -390,7 +443,15 @@ if __name__ == '__main__':
     args_.dev_file = url_to_data_path(args_.dev_url)
     if args_.include_test_examples:
         args_.test_file = url_to_data_path(args_.test_url)
+
     glove_dir = url_to_data_path(args_.glove_url.replace('.zip', ''))
     glove_ext = f'.txt' if glove_dir.endswith('d') else f'.{args_.glove_dim}d.txt'
     args_.glove_file = os.path.join(glove_dir, os.path.basename(glove_dir) + glove_ext)
+
+    # args_.train_file = "./data/train-new.json"
+    # args_.dev_file = "./data/who_dev.json"
+    # args_.include_test_examples = False
+    # args_.dev_eval_file = "./data/who_eval.json"
+    # args_.dev_record_file = "./data/dev_who.npz"
+
     pre_process(args_)
